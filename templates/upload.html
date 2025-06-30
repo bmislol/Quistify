@@ -1,7 +1,14 @@
 {% extends 'base.html' %}
-
-{% block title %}upload{% endblock %}
-
+{% block title %}Upload Summary{% endblock %}
 {% block content %}
-<h1>Welcome to the upload Page</h1>
+<div class="courses-container">
+    <h2>Available Chapters for Upload</h2>
+    <div class="card-list">
+        {% for chapter in chapters %}
+        <div class="course-card" onclick="location.href='{{ url_for('upload_chapter_view', chapter_id=chapter.chapter_id) }}'">
+            {{ chapter.chapter_name }}
+        </div>
+        {% endfor %}
+    </div>
+</div>
 {% endblock %}

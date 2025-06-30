@@ -18,16 +18,12 @@
     <button type="button" id="editBtn">Edit Account</button>
     <button type="submit" id="saveBtn" style="display:none;">Save Changes</button>
   </form>
-
-  <br>
-  <button type="button">Edit Course</button>
-  <button type="button">Edit Chapter</button>
 </div>
 
 <script>
   const editBtn = document.getElementById('editBtn');
   const saveBtn = document.getElementById('saveBtn');
-  const fields = ['username', 'email', 'password'];
+  const fields = ['email', 'password', 'dob'];  // ✅ username is NOT editable
 
   editBtn.addEventListener('click', () => {
     fields.forEach(id => document.getElementById(id).removeAttribute('readonly'));

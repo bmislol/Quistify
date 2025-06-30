@@ -1,16 +1,13 @@
 {% extends 'base.html' %}
-{% block title %}{{ chapter_name }} Summary{% endblock %}
-
+{% block title %}{{ chapter_name }}{% endblock %}
 {% block content %}
 <div class="courses-container">
     <h2>{{ chapter_name }}</h2>
-
     <div class="course-card always-blue">
         <pre class="summary-text">{{ summary }}</pre>
     </div>
-
-    <form method="POST" action="{{ url_for('generate_quiz', chapter_id=chapter_id) }}" style="text-align: center; margin-top: 15px;">
-        <button type="submit">Generate Quiz</button>
+    <form method="POST" action="{{ url_for('upload_summary', chapter_id=chapter_id) }}">
+        <button type="submit" class="submit-button">Upload Summary</button>
     </form>
 </div>
 {% endblock %}

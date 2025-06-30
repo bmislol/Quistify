@@ -118,60 +118,40 @@ def account():
     cursor = conn.cursor()
 
     if request.method == 'POST':
-        new_username = request.form['username'].strip()
         new_email = request.form['email'].strip()
         new_password = request.form['password'].strip()
         dob = request.form['dob']
-        old_username = session['username']
+        username = session['username']
 
-        # Check if username is empty
-        if not new_username:
-            cursor.execute("SELECT * FROM users WHERE username = ?", (old_username,))
+        # Check if email is already taken by another user
+        cursor.execute("""
+            SELECT * FROM users
+            WHERE email = ? AND username != ?
+        """, (new_email, username))
+        conflict = cursor.fetchone()
+
+        if conflict:
+            cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
             user = cursor.fetchone()
             conn.close()
             return render_template("account.html", user={
                 'username': user[0], 'email': user[1], 'password': user[2],
                 'dob': user[3], 'quiz_completed': user[4]
-            }, error="Username cannot be empty.")
+            }, error="Email already in use.")
 
-        # Check for conflicts
-        cursor.execute("""
-            SELECT * FROM users
-            WHERE (username = ? OR email = ?) AND username != ?
-        """, (new_username, new_email, old_username))
-        conflict = cursor.fetchone()
-
-        if conflict:
-            cursor.execute("SELECT * FROM users WHERE username = ?", (old_username,))
-            user = cursor.fetchone()
-            conn.close()
-            return render_template("account.html", user={
-                'username': user[0], 'email': user[1], 'password': user[2],
-                'dob': user[3], 'test_completed': user[4], 'quiz_completed': user[5]
-            }, error="Username or email already in use.")
-
-        # 🔁 Update username in all FK tables
-        for table in ['uploads', 'courses', 'quizzes', 'tests']:
-            cursor.execute(f"""
-                UPDATE {table}
-                SET username = ?
-                WHERE username = ?
-            """, (new_username, old_username))
-
-        # ✅ Update main users table
+        # ✅ Update only email, password, dob
         cursor.execute("""
             UPDATE users
-            SET username = ?, email = ?, password = ?, date_of_birth = ?
+            SET email = ?, password = ?, date_of_birth = ?
             WHERE username = ?
-        """, (new_username, new_email, new_password, dob, old_username))
+        """, (new_email, new_password, dob, username))
 
         conn.commit()
         conn.close()
 
-        session['username'] = new_username
         return redirect(url_for('account'))
 
-    # GET request — fetch user info
+    # GET request – Load user info
     cursor.execute("SELECT * FROM users WHERE username = ?", (session['username'],))
     user = cursor.fetchone()
     conn.close()
@@ -500,7 +480,77 @@ def quiz():
 
 @app.route('/upload')
 def upload():
-    return render_template('upload.html')
+    if 'username' not in session:
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get all chapters for this user
+    cursor.execute("""
+        SELECT c.chapter_id, c.chapter_name, c.course_id
+        FROM chapters c
+        JOIN courses cr ON c.course_id = cr.course_id
+        WHERE cr.username = ?
+        AND c.chapter_id NOT IN (
+            SELECT chapter_id FROM uploads WHERE username = ?
+        )
+    """, (session['username'], session['username']))
+    chapters = cursor.fetchall()
+    conn.close()
+
+    return render_template("upload.html", chapters=chapters)
+
+@app.route('/upload/<int:chapter_id>')
+def upload_chapter_view(chapter_id):
+    if 'username' not in session:
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT chapter_name, chapter_summary, course_id
+        FROM chapters
+        WHERE chapter_id = ?
+    """, (chapter_id,))
+    chapter = cursor.fetchone()
+    conn.close()
+
+    if not chapter:
+        return "Chapter not found", 404
+
+    return render_template("upload_summary.html", chapter_id=chapter_id,
+                           chapter_name=chapter[0],
+                           summary=chapter[1],
+                           course_id=chapter[2])
+
+@app.route('/upload_summary/<int:chapter_id>', methods=['POST'])
+def upload_summary(chapter_id):
+    if 'username' not in session:
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get course_id
+    cursor.execute("SELECT course_id FROM chapters WHERE chapter_id = ?", (chapter_id,))
+    course = cursor.fetchone()
+    if not course:
+        conn.close()
+        return "Invalid chapter", 400
+
+    # Insert into uploads
+    cursor.execute("""
+        INSERT INTO uploads (username, course_id, chapter_id, upload_date)
+        VALUES (?, ?, ?, GETDATE())
+    """, (session['username'], course[0], chapter_id))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for('upload'))
+
 
 @app.route('/load')
 def load():
