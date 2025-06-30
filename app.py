@@ -131,7 +131,7 @@ def account():
             conn.close()
             return render_template("account.html", user={
                 'username': user[0], 'email': user[1], 'password': user[2],
-                'dob': user[3], 'test_completed': user[4], 'quiz_completed': user[5]
+                'dob': user[3], 'quiz_completed': user[4]
             }, error="Username cannot be empty.")
 
         # Check for conflicts
@@ -178,7 +178,7 @@ def account():
 
     return render_template("account.html", user={
         'username': user[0], 'email': user[1], 'password': user[2],
-        'dob': user[3], 'test_completed': user[4], 'quiz_completed': user[5]
+        'dob': user[3], 'quiz_completed': user[4]
     })
 
 @app.route('/home', methods=['GET', 'POST'])
@@ -312,20 +312,191 @@ def view_summary(chapter_id):
     return render_template("summary.html",
                            chapter_name=chapter.chapter_name,
                            summary=chapter.chapter_summary,
-                           course_name=chapter.course_name)
+                           course_name=chapter.course_name,
+                           chapter_id=chapter_id)
 
 @app.route('/generate_quiz/<int:chapter_id>', methods=['POST'])
 def generate_quiz(chapter_id):
-    flash("Quiz generation not implemented yet.")
-    return redirect(url_for('view_summary', chapter_id=chapter_id))
+    if 'username' not in session:
+        return redirect(url_for('login'))
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Get chapter summary
+        cursor.execute("SELECT chapter_summary FROM chapters WHERE chapter_id = ?", (chapter_id,))
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return "Chapter not found.", 404
+
+        summary = row.chapter_summary
+
+        # Prepare OpenAI prompt
+        prompt = (
+            f"Based on the following summary, generate a 5-question multiple choice quiz. "
+            f"Each question should have exactly 3 options (a, b, c) and only one correct answer. "
+            f"Format:\n"
+            f"QUESTION:\n"
+            f"1) Question text\n"
+            f"a) Option A\n"
+            f"b) Option B\n"
+            f"c) Option C\n"
+            f"2) ...\n"
+            f"ANSWER:\n"
+            f"1) a\n2) b\n..."
+            f"\n\nSUMMARY:\n{summary[:4000]}"
+        )
+
+        client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant who creates quizzes."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+
+        full_text = response.choices[0].message.content.strip()
+
+        # Separate QUESTION and ANSWER
+        if "ANSWER:" in full_text:
+            quiz_part, answer_part = full_text.split("ANSWER:", 1)
+        else:
+            quiz_part = full_text
+            answer_part = "Could not extract answers."
+
+        # Insert quiz into database
+        cursor.execute(
+            "INSERT INTO quizzes (chapter_id, quiz_content, quiz_answers, username) VALUES (?, ?, ?, ?)",
+            (chapter_id, quiz_part.strip(), answer_part.strip(), session['username'])
+        )
+        conn.commit()
+
+        # Retrieve the inserted quiz ID using SQL Server's SCOPE_IDENTITY()
+        # Retrieve last inserted quiz ID by filtering
+        cursor.execute("""
+                       SELECT TOP 1 quiz_id
+                       FROM quizzes
+                       WHERE chapter_id = ?
+                         AND username = ?
+                       ORDER BY date_created DESC
+                       """, (chapter_id, session['username']))
+        quiz_id_row = cursor.fetchone()
+
+        if not quiz_id_row or not quiz_id_row[0]:
+            conn.close()
+            return "Failed to retrieve quiz ID.", 500
+
+        quiz_id = quiz_id_row[0]
+        conn.close()
+
+        return redirect(url_for('solve_quiz', quiz_id=quiz_id))
+
+    except Exception as e:
+        return f"Quiz generation failed: {str(e)}", 500
+
+
+@app.route('/solve_quiz/<int:quiz_id>', methods=['GET', 'POST'])
+def solve_quiz(quiz_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get quiz details
+    cursor.execute("SELECT quiz_content, quiz_answers, chapter_id FROM quizzes WHERE quiz_id = ?", (quiz_id,))
+    result = cursor.fetchone()
+    if not result:
+        conn.close()
+        return "Quiz not found", 404
+
+    quiz_text, answer_text, chapter_id = result
+
+    # Get chapter name
+    cursor.execute("SELECT chapter_name FROM chapters WHERE chapter_id = ?", (chapter_id,))
+    chapter = cursor.fetchone()
+    chapter_name = chapter[0] if chapter else "Unknown Chapter"
+
+    conn.close()
+
+    # Parse questions
+    questions = []
+    lines = quiz_text.strip().splitlines()
+    current_q = {}
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        if line[0].isdigit() and ')' in line:
+            if current_q:
+                questions.append(current_q)
+            current_q = {
+                "question": line[line.find(')') + 1:].strip(),
+                "options": []
+            }
+        elif line[0] in ['a', 'b', 'c'] and ')' in line:
+            current_q["options"].append(line)
+    if current_q:
+        questions.append(current_q)
+
+    # Parse answers
+    correct_answers = {}
+    answer_lines = answer_text.strip().splitlines()
+    for line in answer_lines:
+        if ')' in line:
+            qnum, opt = line.split(')')
+            correct_answers[int(qnum.strip())] = opt.strip()
+
+    return render_template(
+        "solve_quiz.html",
+        questions=questions,
+        quiz_id=quiz_id,
+        chapter_name=chapter_name,
+        correct_answers=correct_answers
+    )
+
+@app.route('/increment_quiz_count', methods=['POST'])
+def increment_quiz_count():
+    if 'username' not in session:
+        return 'Unauthorized', 401
+
+    username = session['username']
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        cursor.execute("UPDATE users SET quiz_completed = quiz_completed + 1 WHERE username = ?", (username,))
+        connection.commit()
+        return 'Success', 200
+    except Exception as e:
+        print("Error incrementing quiz count:", e)
+        return 'Server Error', 500
+    finally:
+        connection.close()
+
 
 @app.route('/quiz')
 def quiz():
-    return render_template('quiz.html')
+    if 'username' not in session:
+        return redirect(url_for('login'))
 
-@app.route('/test')
-def test():
-    return render_template('test.html')
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT q.quiz_id, q.chapter_id, q.username, q.quiz_content, c.chapter_name, q.date_created
+        FROM quizzes q
+        JOIN chapters c ON q.chapter_id = c.chapter_id
+        WHERE q.username = ?
+        ORDER BY q.date_created DESC
+    """, (session['username'],))
+
+    quizzes = cursor.fetchall()
+    conn.close()
+
+    return render_template("quiz.html", quizzes=quizzes)
+
+
 
 @app.route('/upload')
 def upload():

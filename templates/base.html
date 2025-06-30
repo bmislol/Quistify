@@ -13,7 +13,6 @@
             {% if 'username' in session %}
                 <li><a href="{{ url_for('home') }}" class="{% if request.path == '/' %}active{% endif %}">Home</a></li>
                 <li><a href="{{ url_for('quiz') }}" class="{% if request.path == '/quiz' %}active{% endif %}">Quiz</a></li>
-                <li><a href="{{ url_for('test') }}" class="{% if request.path == '/test' %}active{% endif %}">Test</a></li>
                 <li><a href="{{ url_for('upload') }}" class="{% if request.path == '/upload' %}active{% endif %}">Upload</a></li>
                 <li><a href="{{ url_for('load') }}" class="{% if request.path == '/load' %}active{% endif %}">Load</a></li>
                 <li><a href="{{ url_for('account') }}" class="{% if request.path == '/account' %}active{% endif %}">Account</a></li>

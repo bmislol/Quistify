@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="centered-container">
+    <h2 class="title">Quiz: {{ chapter_name }}</h2>
+    <form id="quiz-form">
+        {% for q in questions %}
+        {% set q_index = loop.index0 %}
+        <div class="quiz-card">
+            <p><strong>Question {{ loop.index }}:</strong> {{ q.question }}</p>
+            {% for opt in q.options %}
+            <label>
+                <input type="radio" name="q{{ q_index }}" value="{{ opt[0] }}">
+                {{ opt }}
+            </label><br>
+            {% endfor %}
+        </div>
+        {% endfor %}
+        <button type="submit" class="btn">Submit</button>
+        <p id="result" class="score-text"></p>
+    </form>
+</div>
+
+<script>
+document.getElementById("quiz-form").addEventListener("submit", function(e) {
+    e.preventDefault();
+
+    const form = e.target;
+    const total = {{ questions|length }};
+    const answerKey = {{ correct_answers|tojson }};
+    let score = 0;
+    let answered = 0;
+
+    for (let i = 0; i < total; i++) {
+        const selected = form.querySelector(`input[name="q${i}"]:checked`);
+        if (selected) {
+            answered++;
+            if (selected.value === answerKey[i + 1]) {
+                score++;
+            }
+        }
+    }
+
+    if (answered < total) {
+        document.getElementById("result").innerText = "Please answer all questions before submitting.";
+    } else {
+        document.getElementById("result").innerText = `You scored ${score} out of ${total}.`;
+        fetch("/increment_quiz_count", { method: "POST" });
+    }
+});
+</script>
+
+<style>
+.quiz-card {
+    background-color: #f1f1f1;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+.score-text {
+    font-weight: bold;
+    margin-top: 15px;
+}
+</style>
+{% endblock %}

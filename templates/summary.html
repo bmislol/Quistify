@@ -10,10 +10,13 @@
     </div>
 
 
-    <div class="add-course-form" style="margin-top: 20px;">
-        <button type="button" onclick="alert('Quiz generation coming soon')">Generate Quiz</button>
-        <button type="button" onclick="alert('Test generation not implemented yet')">Generate Test</button>
-    </div>
+    <div class="buttons" style="margin-top: 20px; text-align: center;">
+  <form method="POST" action="{{ url_for('generate_quiz', chapter_id=chapter_id) }}">
+    <button type="submit" class="submit-button">Generate Quiz</button>
+  </form>
+</div>
+
+
 
 </div>
 {% endblock %}
