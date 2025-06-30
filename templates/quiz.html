@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block title %}{{ chapter_name }} Quiz{% endblock %}
+
+{% block content %}
+<div class="courses-container">
+    <h2>Quiz for "{{ chapter_name }}"</h2>
+
+    <form method="POST" class="quiz-form">
+        {% for q in quiz %}
+        <div class="course-card always-blue">
+            <p><strong>Question {{ loop.index }}:</strong> {{ q.question }}</p>
+            <ul>
+                {% for opt in q.options %}
+                <li>
+                    <label>
+                        <input type="radio" name="q{{ loop.parent.index }}" value="{{ loop.index0 }}" required>
+                        {{ opt }}
+                    </label>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endfor %}
+
+        <div class="add-course-form" style="margin-top: 20px;">
+            <button type="submit">Submit Quiz</button>
+        </div>
+    </form>
+
+    {% if result %}
+    <div class="course-card always-blue">
+        <p><strong>Your Score:</strong> {{ result.score }}/5</p>
+        <ul>
+        {% for idx, is_correct in result.details %}
+            <li>Question {{ idx + 1 }}: {{ 'Correct' if is_correct else 'Incorrect' }}</li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

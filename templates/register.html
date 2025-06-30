@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+
+{% block title %}Register{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <h2>Register</h2>
+    <form method="post">
+        <input type="text" name="username" placeholder="Username" required>
+        <input type="email" name="email" placeholder="Email" required>
+        <input type="password" name="password" placeholder="Password" required>
+        <input type="date" name="dob" placeholder="Date of Birth" required>
+        <button type="submit">Register</button>
+    </form>
+    <p class="form-link">
+        Already have an account? <a href="{{ url_for('login') }}">Login here</a>
+    </p>
+    {% if get_flashed_messages() %}
+        <div class="form-error">
+            {% for msg in get_flashed_messages() %}
+                <p>{{ msg }}</p>
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

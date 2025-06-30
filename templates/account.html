@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}Account{% endblock %}
+
+{% block content %}
+<div class="form-container">
+  <h1>Account Details</h1>
+    {% if error %}
+    <div class="form-error">{{ error }}</div>
+    {% endif %}
+
+  <form id="accountForm" method="POST" action="{{ url_for('account') }}">
+    <input type="text" name="username" id="username" value="{{ user.username }}" readonly>
+    <input type="email" name="email" id="email" value="{{ user.email }}" readonly>
+    <input type="text" name="password" id="password" value="{{ user.password }}" readonly>
+    <input type="date" name="dob" id="dob" value="{{ user.dob }}" readonly>
+    <input type="text" value="Tests Completed: {{ user.test_completed }}" readonly>
+    <input type="text" value="Quizzes Completed: {{ user.quiz_completed }}" readonly>
+
+    <button type="button" id="editBtn">Edit Account</button>
+    <button type="submit" id="saveBtn" style="display:none;">Save Changes</button>
+  </form>
+
+  <br>
+  <button type="button">Edit Course</button>
+  <button type="button">Edit Chapter</button>
+</div>
+
+<script>
+  const editBtn = document.getElementById('editBtn');
+  const saveBtn = document.getElementById('saveBtn');
+  const fields = ['username', 'email', 'password'];
+
+  editBtn.addEventListener('click', () => {
+    fields.forEach(id => document.getElementById(id).removeAttribute('readonly'));
+    editBtn.style.display = 'none';
+    saveBtn.style.display = 'inline-block';
+  });
+</script>
+{% endblock %}

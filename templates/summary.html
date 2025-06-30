@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}{{ chapter_name }} Summary{% endblock %}
+
+{% block content %}
+<div class="courses-container">
+    <h2>{{ chapter_name }}</h2>
+
+    <div class="course-card always-blue">
+        <pre class="summary-text">{{ summary }}</pre>
+    </div>
+
+
+    <div class="add-course-form" style="margin-top: 20px;">
+        <button type="button" onclick="alert('Quiz generation coming soon')">Generate Quiz</button>
+        <button type="button" onclick="alert('Test generation not implemented yet')">Generate Test</button>
+    </div>
+
+</div>
+{% endblock %}

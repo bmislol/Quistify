@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}My Site{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script defer src="{{ url_for('static', filename='navbar.js') }}"></script>
+</head>
+<body>
+    <nav class="navbar">
+    <div class="nav-container">
+        <ul class="nav-links" id="navLinks">
+            {% if 'username' in session %}
+                <li><a href="{{ url_for('home') }}" class="{% if request.path == '/' %}active{% endif %}">Home</a></li>
+                <li><a href="{{ url_for('quiz') }}" class="{% if request.path == '/quiz' %}active{% endif %}">Quiz</a></li>
+                <li><a href="{{ url_for('test') }}" class="{% if request.path == '/test' %}active{% endif %}">Test</a></li>
+                <li><a href="{{ url_for('upload') }}" class="{% if request.path == '/upload' %}active{% endif %}">Upload</a></li>
+                <li><a href="{{ url_for('load') }}" class="{% if request.path == '/load' %}active{% endif %}">Load</a></li>
+                <li><a href="{{ url_for('account') }}" class="{% if request.path == '/account' %}active{% endif %}">Account</a></li>
+                <li><a href="{{ url_for('logout') }}">Logout</a></li>
+            {% else %}
+                <li><a href="{{ url_for('login') }}" class="{% if request.path == '/login' %}active{% endif %}">Login</a></li>
+                <li><a href="{{ url_for('register') }}" class="{% if request.path == '/register' %}active{% endif %}">Register</a></li>
+            {% endif %}
+        </ul>
+    </div>
+</nav>
+
+
+
+    <div class="content">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

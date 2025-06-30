@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<div class="courses-container">
+    <h2>Courses</h2>
+
+    {% if error %}
+        <p class="form-error">{{ error }}</p>
+    {% elif success %}
+        <p class="form-success">{{ success }}</p>
+    {% endif %}
+
+    <div class="card-list">
+    {% for course in courses %}
+    <div class="course-card" onclick="location.href='{{ url_for('view_course', course_id=course.course_id) }}'">
+        {{ course.course_name }}
+    </div>
+{% endfor %}
+
+</div>
+
+
+    <form class="add-course-form" method="POST">
+        <input type="text" name="course_name" placeholder="New Course Name" required />
+        <button type="submit">Add Course</button>
+    </form>
+</div>
+{% endblock %}
