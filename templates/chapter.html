@@ -1,48 +1,70 @@
-{% extends 'base.html' %}
-{% block title %}{{ course_name }}{% endblock %}
-
-{% block content %}
+{% extends 'base.html' %} {% block title %}{{ course_name }}{% endblock %} {%
+block content %}
 <div class="courses-container">
-    <h2>{{ course_name }}</h2>
+  <h2>{{ course_name }}</h2>
 
-    {% for chapter in chapters %}
-    <div class="course-card" onclick="location.href='{{ url_for('view_summary', chapter_id=chapter.chapter_id) }}'">
-        {{ chapter.chapter_name }}
-    </div>
-    {% endfor %}
+  {% for chapter in chapters %}
+  <div
+    class="course-card"
+    onclick="location.href='{{ url_for('view_summary', chapter_id=chapter.chapter_id) }}'"
+  >
+    {{ chapter.chapter_name }}
+  </div>
+  {% endfor %}
 
+  <form
+    method="POST"
+    enctype="multipart/form-data"
+    class="add-course-form"
+    onsubmit="return validateFileSize();"
+  >
+    <input
+      type="text"
+      name="chapter_name"
+      placeholder="Chapter Name (Required)"
+      required
+    />
 
-    <form method="POST" enctype="multipart/form-data" class="add-course-form" onsubmit="return validateFileSize();">
-        <input type="text" name="chapter_name" placeholder="Chapter Name (Required)" required>
+    <label for="chapter_file" class="file-label">Choose File</label>
+    <span id="file-name">No file chosen</span>
+    <input
+      type="file"
+      id="chapter_file"
+      name="chapter_file"
+      accept=".pdf,.doc,.docx,.ppt,.pptx,.txt"
+      required
+      hidden
+    />
 
-        <label for="chapter_file" class="file-label">Choose File</label>
-        <span id="file-name">No file chosen</span>
-        <input type="file" id="chapter_file" name="chapter_file" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt" required hidden>
+    <button type="submit">Add Chapter</button>
 
-        <button type="submit">Add Chapter</button>
-        {% if error %}<p class="form-error">{{ error }}</p>{% endif %}
-    </form>
+    {% if error %}
+    <p class="form-error">{{ error }}</p>
+    {% endif %} {% if success %}
+    <p class="form-success">{{ success }}</p>
+    {% endif %}
+  </form>
 </div>
 
 <script>
-    const fileInput = document.getElementById('chapter_file');
-    const fileNameDisplay = document.getElementById('file-name');
+  const fileInput = document.getElementById("chapter_file");
+  const fileNameDisplay = document.getElementById("file-name");
 
-    fileInput.addEventListener('change', function () {
-        if (fileInput.files.length > 0) {
-            fileNameDisplay.textContent = fileInput.files[0].name;
-        } else {
-            fileNameDisplay.textContent = "No file chosen";
-        }
-    });
-
-    function validateFileSize() {
-        const file = fileInput.files[0];
-        if (file && file.size > 5 * 1024 * 1024) {
-            alert("File must be 5MB or less.");
-            return false;
-        }
-        return true;
+  fileInput.addEventListener("change", function () {
+    if (fileInput.files.length > 0) {
+      fileNameDisplay.textContent = fileInput.files[0].name;
+    } else {
+      fileNameDisplay.textContent = "No file chosen";
     }
+  });
+
+  function validateFileSize() {
+    const file = fileInput.files[0];
+    if (file && file.size > 5 * 1024 * 1024) {
+      alert("File must be 5MB or less.");
+      return false;
+    }
+    return true;
+  }
 </script>
 {% endblock %}

@@ -1,7 +1,23 @@
 {% extends 'base.html' %}
-
-{% block title %}load{% endblock %}
+{% block title %}Load Chapters{% endblock %}
 
 {% block content %}
-<h1>Welcome to the load Page</h1>
+<div class="courses-container">
+    <h2>Available Chapters to Load</h2>
+
+    <form class="add-course-form" method="GET" action="{{ url_for('load') }}">
+    <input type="text" name="query" placeholder="Search by username or chapter name" value="{{ request.args.get('query', '') }}" required />
+    <button type="submit">Search</button>
+</form>
+
+    <br> <br>
+    <div class="card-list">
+        {% for upload in uploads %}
+        <div class="course-card" onclick="location.href='{{ url_for('view_upload', upload_id=upload.upload_id) }}'">
+            {{ upload.chapter_name }} <br>
+            <small>From: {{ upload.uploader }}</small>
+        </div>
+        {% endfor %}
+    </div>
+</div>
 {% endblock %}

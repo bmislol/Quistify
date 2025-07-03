@@ -1,10 +1,18 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
-</head>
-<body>
-$END$
-</body>
-</html>
+{% extends 'base.html' %}
+{% block title %}{{ chapter.chapter_name }}{% endblock %}
+
+{% block content %}
+<div class="courses-container">
+    <h2>{{ chapter.chapter_name }}</h2>
+
+    <div class="course-card always-blue">
+        <pre class="summary-text">{{ chapter.chapter_summary }}</pre>
+    </div>
+
+    <div style="text-align: center; margin-top: 20px;">
+        <form method="POST" action="{{ url_for('load_chapter', upload_id=chapter.upload_id) }}">
+            <button type="submit" class="submit-button">Load Chapter</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

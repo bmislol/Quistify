@@ -2,6 +2,7 @@ from flask import render_template, request, redirect, url_for, session, flash
 import pyodbc
 from config import app, DB_CONFIG
 import os
+import traceback
 import tempfile
 import docx2txt
 import pptx
@@ -187,86 +188,133 @@ def home():
     conn.close()
     return render_template("home.html", courses=courses, error=error, success=success)
 
+import traceback
+
 @app.route('/course/<int:course_id>', methods=['GET', 'POST'])
 def view_course(course_id):
     if 'username' not in session:
         return redirect(url_for('login'))
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    # Pop flash messages first
+    error = session.pop('chapter_error', None)
+    success = session.pop('chapter_success', None)
 
-    # Fetch course name
-    cursor.execute("SELECT course_name FROM courses WHERE course_id = ? AND username = ?", (course_id, session['username']))
-    course = cursor.fetchone()
-
-    if not course:
-        conn.close()
-        return redirect(url_for('home'))
-
-    course_name = course[0]
-    error = None
-
-    # POST: Handle file upload and summarization
     if request.method == 'POST':
+        print("📥 POST /course/<course_id> triggered.")
         chapter_name = request.form['chapter_name'].strip()
         file = request.files.get('chapter_file')
+        error = None
+        conn = None
 
-        if not file:
-            error = "No file uploaded."
-        elif file.filename.split('.')[-1].lower() not in ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'txt']:
-            error = "Unsupported file type."
-        elif len(file.read()) > 5 * 1024 * 1024:
-            error = "File too large. Limit is 5MB."
-        else:
-            file.seek(0)  # Reset file pointer
-            with tempfile.NamedTemporaryFile(delete=False) as tmp:
-                file.save(tmp.name)
-                tmp_path = tmp.name
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            print("🔌 DB connected for POST")
 
-            text = extract_text(tmp_path, file.filename)
-            os.unlink(tmp_path)
+            # Verify course belongs to user
+            cursor.execute("SELECT course_name FROM courses WHERE course_id = ? AND username = ?", 
+                           (course_id, session['username']))
+            course = cursor.fetchone()
+            if not course:
+                print("❌ Invalid course or permission denied")
+                conn.close()
+                return redirect(url_for('home'))
 
-            if not text:
-                error = "Failed to extract text from file."
+            # Validate file
+            if not file:
+                error = "No file uploaded."
+            elif file.filename.split('.')[-1].lower() not in ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'txt']:
+                error = "Unsupported file type."
             else:
-                try:
-                    # Language detection logic skipped for now, always using English
-                    prompt = f"Summarize the following file content in a friendly, easy-to-understand way:\n\n{text[:4000]}"
-                    client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+                file.seek(0)
+                if len(file.read()) > 5 * 1024 * 1024:
+                    error = "File too large. Limit is 5MB."
+                else:
+                    file.seek(0)
+                    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                        file.save(tmp.name)
+                        tmp_path = tmp.name
+                        print("📄 File saved at", tmp_path)
+                    text = extract_text(tmp_path, file.filename)
+                    os.unlink(tmp_path)
+                    print("📄 Extracted text length:", len(text) if text else "None")
 
-                    response = client.chat.completions.create(
-                        model="gpt-4o",
-                        messages=[
-                            {"role": "system", "content": "You are a helpful assistant who explains things clearly."},
-                            {"role": "user", "content": prompt}
-                        ]
-                    )
+                    if not text:
+                        error = "Failed to extract text from file."
+                    else:
+                        prompt = f"Summarize the following file content in a friendly, easy-to-understand way:\n{text[:4000]}"
+                        print("🤖 Sending to OpenAI")
+                        try:
+                            client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+                            response = client.chat.completions.create(
+                                model="gpt-4o",
+                                messages=[
+                                    {"role": "system", "content": "You are a helpful assistant who explains things clearly."},
+                                    {"role": "user", "content": prompt}
+                                ]
+                            )
+                            summary = response.choices[0].message.content.strip()
+                            print("✅ Got summary")
 
-                    summary = response.choices[0].message.content.strip()
+                            cursor.execute(
+                                "INSERT INTO chapters (chapter_name, course_id, chapter_summary) VALUES (?, ?, ?)",
+                                (chapter_name, course_id, summary)
+                            )
+                            conn.commit()
+                            print("✅ Inserted chapter and committed")
+                            success = f"Chapter '{chapter_name}' added successfully."
 
-                    # Insert chapter
-                    cursor.execute(
-                        "INSERT INTO chapters (chapter_name, course_id, chapter_summary) VALUES (?, ?, ?)",
-                        (chapter_name, course_id, summary)
-                    )
-                    conn.commit()
+                        except Exception as e:
+                            error = f"AI summary failed: {str(e)}"
+                            print("❌ OpenAI or DB error:")
+                            traceback.print_exc()
 
-                    # Get new chapter ID
-                    cursor.execute("SELECT SCOPE_IDENTITY()")
-                    new_chapter_id = cursor.fetchone()[0]
+            if error:
+                session['chapter_error'] = error
+            else:
+                session['chapter_success'] = success
 
-                    conn.close()
-                    return redirect(url_for('view_summary', chapter_id=new_chapter_id))
+        except Exception as e:
+            print("❌ Fatal POST error:")
+            traceback.print_exc()
+            error = "Internal error while adding chapter."
+            session['chapter_error'] = error
+        finally:
+            if conn:
+                conn.close()
+                print("🔒 DB connection closed (POST)")
 
-                except Exception as e:
-                    error = f"AI summary failed: {str(e)}"
+        return redirect(url_for('view_course', course_id=course_id))
 
-    # Load all chapters
-    cursor.execute("SELECT * FROM chapters WHERE course_id = ?", (course_id,))
-    chapters = cursor.fetchall()
-    conn.close()
+    # GET request
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        print("🌐 GET request: Fetching course and chapters")
+        cursor.execute("SELECT course_name FROM courses WHERE course_id = ? AND username = ?", 
+                       (course_id, session['username']))
+        course = cursor.fetchone()
+        if not course:
+            conn.close()
+            return redirect(url_for('home'))
+        course_name = course[0]
 
-    return render_template("chapter.html", course_name=course_name, chapters=chapters, error=error)
+        cursor.execute("SELECT * FROM chapters WHERE course_id = ?", (course_id,))
+        chapters = cursor.fetchall()
+        conn.close()
+        print("✅ GET complete")
+    except Exception as e:
+        print("❌ GET error:")
+        traceback.print_exc()
+        course_name = "Unknown"
+        chapters = []
+        error = "Could not load course or chapters."
+
+    return render_template("chapter.html",
+                           course_name=course_name,
+                           chapters=chapters,
+                           error=error,
+                           success=success)
 
 @app.route('/summary/<int:chapter_id>')
 def view_summary(chapter_id):
@@ -554,5 +602,112 @@ def upload_summary(chapter_id):
 
 @app.route('/load')
 def load():
-    return render_template('load.html')
+    if 'username' not in session:
+        return redirect(url_for('login'))
 
+    current_user = session['username']
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    query = request.args.get('query', '').strip()
+
+    # Base query: all uploads not by the current user
+    sql = """
+        SELECT u.upload_id, u.username AS uploader, c.chapter_name
+        FROM uploads u
+        JOIN chapters c ON u.chapter_id = c.chapter_id
+        WHERE u.username != ?
+    """
+    params = [current_user]
+
+    # Add filter if search query is provided
+    if query:
+        sql += " AND (u.username LIKE ? OR c.chapter_name LIKE ?)"
+        params.extend([f'%{query}%', f'%{query}%'])
+
+    cursor.execute(sql, params)
+    uploads = [dict(upload_id=row[0], uploader=row[1], chapter_name=row[2]) for row in cursor.fetchall()]
+    conn.close()
+
+    return render_template('load.html', uploads=uploads)
+
+
+@app.route('/view_upload/<int:upload_id>')
+def view_upload(upload_id):
+    if 'username' not in session:
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT u.upload_id, u.chapter_id, u.course_id, u.username AS uploader, 
+               ch.chapter_name, ch.chapter_summary
+        FROM uploads u
+        JOIN chapters ch ON u.chapter_id = ch.chapter_id
+        WHERE u.upload_id = ?
+    """, (upload_id,))
+    chapter = cursor.fetchone()
+    conn.close()
+
+    if not chapter:
+        return "Upload not found.", 404
+
+    return render_template('view_upload.html', chapter=chapter)
+
+@app.route('/load_chapter/<int:upload_id>', methods=['POST'])
+def load_chapter(upload_id):
+    if 'username' not in session:
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get upload data
+    cursor.execute("""
+        SELECT u.username AS uploader, ch.chapter_name, ch.chapter_summary
+        FROM uploads u
+        JOIN chapters ch ON u.chapter_id = ch.chapter_id
+        WHERE u.upload_id = ?
+    """, (upload_id,))
+    data = cursor.fetchone()
+
+    if not data:
+        conn.close()
+        return "Upload not found", 404
+
+    uploader = data[0]
+    chapter_name = data[1]
+    chapter_summary = data[2]
+
+    # Check if course with uploader's name exists for current user
+    cursor.execute("""
+        SELECT course_id FROM courses
+        WHERE course_name = ? AND username = ?
+    """, (uploader, session['username']))
+    course = cursor.fetchone()
+
+    if course:
+        course_id = course[0]
+    else:
+        # Create new course
+        cursor.execute("""
+            INSERT INTO courses (course_name, username)
+            OUTPUT INSERTED.course_id
+            VALUES (?, ?)
+        """, (uploader, session['username']))
+        course_id = cursor.fetchone()[0]
+
+    # Insert chapter
+    cursor.execute("""
+        INSERT INTO chapters (chapter_name, course_id, chapter_summary)
+        VALUES (?, ?, ?)
+    """, (chapter_name, course_id, chapter_summary))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for('load'))
+
+if __name__ == '__main__':
+    app.run(debug=True)
